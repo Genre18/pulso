@@ -1,0 +1,1191 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Pulso</title>
+<meta name="theme-color" content="#060A13">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23060A13'/%3E%3Cpath d='M4 18h6l3-8 5 14 3-6h7' fill='none' stroke='%23D6B36A' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<style>
+/* "Sala de mando": terminal oscuro azul marino + oro. Una sola apariencia, deliberadamente oscura. */
+:root {
+  --bg: #060A13; --panel: #0B1222; --panel-2: #0F1830; --line: #1B2640; --line-2: #26345A;
+  --ink: #E9EDF5; --muted: #8592AD; --dim: #5A6784; --soft: #B9C2D6;
+  --gold: #D6B36A; --gold-2: #F1D79B; --gold-soft: rgba(214,179,106,.10);
+  --up: #2BD48C; --up-soft: rgba(43,212,140,.12); --down: #FF5C61; --down-soft: rgba(255,92,97,.12); --warn: #F4B740; --warn-soft: rgba(244,183,64,.12);
+  --f-display: "Instrument Serif", Georgia, "Times New Roman", serif;
+  --f-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box }
+html { -webkit-text-size-adjust: 100% }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 15px; line-height: 1.55;
+  background-image: radial-gradient(1200px 500px at 85% -10%, rgba(214,179,106,.07), transparent 60%), radial-gradient(900px 400px at -10% 10%, rgba(60,90,170,.10), transparent 60%); background-attachment: fixed; overflow-x: hidden }
+.wrap { max-width: 1120px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)) }
+h1, h2, h3 { margin: 0; font-weight: 400; text-wrap: balance; line-height: 1.1 }
+h2 { font-family: var(--f-display); font-size: 1.7rem; letter-spacing: -.01em }
+h3 { font-family: var(--f-display); font-size: 1.35rem }
+p { margin: 0 }
+.mono, .num { font-family: var(--f-mono); font-variant-numeric: tabular-nums }
+.muted { color: var(--muted) }
+.label { font-family: var(--f-mono); font-size: .68rem; letter-spacing: .16em; text-transform: uppercase; color: var(--gold); font-weight: 500 }
+a { color: var(--gold-2) }
+button { font: inherit; cursor: pointer; color: inherit }
+:focus-visible { outline: 1px solid var(--gold); outline-offset: 2px }
+[hidden] { display: none !important }
+.up { color: var(--up) } .down { color: var(--down) } .flat { color: var(--muted) }
+
+/* Cinta TradingView */
+.tape { border-bottom: 1px solid var(--line); background: #04070E; min-height: 46px; overflow: hidden }
+
+/* Barra de mando */
+header { position: sticky; top: 0; z-index: 5; background: rgba(6,10,19,.9); backdrop-filter: blur(10px); border-bottom: 1px solid var(--line) }
+.hbar { display: flex; align-items: center; justify-content: space-between; gap: 12px 16px; padding-block: 12px; flex-wrap: wrap }
+.brand h1 { font-family: var(--f-display); font-size: 1.7rem; letter-spacing: .01em }
+.brand h1 i { color: var(--gold); font-style: italic }
+.tabs { display: flex; gap: 2px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 3px }
+.tab { background: none; border: 0; padding: 7px 14px; color: var(--muted); font-family: var(--f-mono); font-size: .74rem; letter-spacing: .14em; text-transform: uppercase; border-radius: 4px }
+.tab[aria-selected="true"] { color: #0A0F1C; background: var(--gold) }
+.clock { font-family: var(--f-mono); font-size: .78rem; color: var(--muted); display: flex; gap: 14px; align-items: center }
+.clock b { color: var(--ink); font-weight: 500 }
+.mkt { display: inline-flex; gap: 6px; align-items: center }
+.dot { width: 7px; height: 7px; border-radius: 50%; background: var(--dim); display: inline-block }
+.dot.on { background: var(--up); box-shadow: 0 0 8px var(--up) }
+.linkbtn { background: none; border: 0; color: var(--dim); font-family: var(--f-mono); font-size: .7rem; letter-spacing: .12em; text-transform: uppercase; padding: 4px }
+.linkbtn:hover { color: var(--gold) }
+
+main { padding-block: 26px 60px; display: grid; gap: 18px }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px }
+.panel { background: linear-gradient(180deg, var(--panel-2), var(--panel)); border: 1px solid var(--line); border-radius: 10px; padding: 20px; display: grid; gap: 14px; min-width: 0; align-content: start }
+.phead { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--line); flex-wrap: wrap }
+.phead .label { color: var(--muted) }
+
+/* Semáforo */
+.hero { display: grid; grid-template-columns: 1.35fr 1fr; gap: 18px }
+.status { display: inline-flex; align-items: center; gap: 10px; font-family: var(--f-mono); font-size: .75rem; letter-spacing: .16em; text-transform: uppercase; padding: 6px 12px; border-radius: 4px; border: 1px solid currentColor; width: fit-content; color: var(--muted) }
+.status.verde { color: var(--up); background: var(--up-soft) } .status.amarillo { color: var(--warn); background: var(--warn-soft) } .status.rojo { color: var(--down); background: var(--down-soft) }
+.status .led { width: 8px; height: 8px; border-radius: 50%; background: currentColor; box-shadow: 0 0 10px currentColor; animation: pulse 2.4s ease-in-out infinite }
+@keyframes pulse { 50% { opacity: .35 } }
+.headline { font-family: var(--f-display); font-size: clamp(2rem, 4.4vw, 3.1rem); line-height: 1.04; letter-spacing: -.015em }
+.summary { color: var(--soft); max-width: 62ch; font-size: 1rem }
+.why { display: grid; border: 1px solid var(--line); border-radius: 6px; overflow: hidden }
+.why div { display: grid; grid-template-columns: 96px 1fr; gap: 12px; padding: 10px 14px; border-top: 1px solid var(--line); background: var(--panel); align-items: baseline }
+.why div:first-child { border-top: 0 }
+.why span { font-family: var(--f-mono); font-size: .65rem; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); display: flex; gap: 8px; align-items: center }
+.why p { font-size: .93rem }
+.sq { width: 8px; height: 8px; border-radius: 1px; display: inline-block; background: var(--dim); flex: none }
+.sq.verde { background: var(--up) } .sq.amarillo { background: var(--warn) } .sq.rojo { background: var(--down) }
+
+.kv { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 6px; overflow: hidden }
+.kv div { background: var(--panel); padding: 10px 12px; display: grid; gap: 2px }
+.kv span { font-family: var(--f-mono); font-size: .65rem; letter-spacing: .14em; text-transform: uppercase; color: var(--muted) }
+.kv b { font-family: var(--f-mono); font-weight: 500; font-size: 1.15rem }
+.bignum { font-family: var(--f-mono); font-size: clamp(2.6rem, 6vw, 3.6rem); font-weight: 500; line-height: 1; letter-spacing: -.02em }
+.goldrule { height: 2px; width: 64px; background: linear-gradient(90deg, var(--gold), transparent) }
+
+/* Línea de tiempo */
+.tl { display: grid; gap: 6px }
+.tl-bar { position: relative; height: 40px; border-radius: 4px; background: var(--panel); overflow: hidden; border: 1px solid var(--line) }
+.tl-seg { position: absolute; top: 0; bottom: 0; display: flex; align-items: center; justify-content: center; font-family: var(--f-mono); font-size: .68rem; overflow: hidden; white-space: nowrap; border-right: 1px solid var(--bg) }
+.tl-seg.verde { background: var(--up-soft); color: var(--up); box-shadow: inset 0 -3px 0 var(--up) }
+.tl-seg.amarillo { background: var(--warn-soft); color: var(--warn); box-shadow: inset 0 -3px 0 var(--warn) }
+.tl-seg.rojo { background: var(--down-soft); color: var(--down); box-shadow: inset 0 -3px 0 var(--down) }
+.tl-now { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--gold); box-shadow: 0 0 10px var(--gold); z-index: 1 }
+.tl-ticks { position: relative; height: 16px; font-family: var(--f-mono); font-size: .68rem; color: var(--dim) }
+.tl-ticks span { position: absolute; transform: translateX(-50%) }
+.tl-ticks span:first-child { transform: none } .tl-ticks span:last-child { transform: translateX(-100%) }
+.tl-list { display: grid; font-size: .9rem }
+.tl-list div { display: grid; grid-template-columns: 120px 1fr; gap: 12px; padding: 8px 0; border-top: 1px solid var(--line) }
+.tl-list div:first-child { border-top: 0 }
+.tl-list .t { font-family: var(--f-mono); display: flex; gap: 8px; align-items: center }
+
+.chart { height: 520px; border-radius: 6px; overflow: hidden; border: 1px solid var(--line); background: var(--panel) }
+.chart > div { height: 100% }
+
+/* Noticias */
+.events { display: grid }
+.ev { display: grid; grid-template-columns: 58px 1fr; gap: 14px; padding: 11px 0; border-top: 1px solid var(--line) }
+.ev:first-child { border-top: 0; padding-top: 0 }
+.ev .t { font-family: var(--f-mono); font-weight: 500; color: var(--gold-2) }
+.ev.past { opacity: .5 }
+.ev .top { display: flex; gap: 10px; flex-wrap: wrap; align-items: center }
+.imp { font-family: var(--f-mono); font-size: .62rem; letter-spacing: .14em; text-transform: uppercase; padding: 2px 6px; border-radius: 2px; border: 1px solid currentColor }
+.imp.alto { color: var(--down) } .imp.medio { color: var(--warn) } .imp.bajo, .imp.feriado { color: var(--muted) }
+.sub { font-family: var(--f-mono); font-size: .72rem; color: var(--dim) }
+
+.tip { border-left: 2px solid var(--gold); padding: 8px 14px; background: var(--gold-soft); font-size: .93rem; color: var(--ink) }
+.notice { border: 1px solid var(--warn); background: var(--warn-soft); border-radius: 6px; padding: 10px 14px; font-size: .9rem }
+.notice.info { border-color: var(--line-2); background: var(--panel) }
+.check { display: grid; gap: 2px }
+.check label { display: flex; gap: 12px; align-items: flex-start; cursor: pointer; padding: 8px 0; border-top: 1px solid var(--line); font-size: .93rem }
+.check label:first-child { border-top: 0 }
+.check input, .cb { appearance: none; -webkit-appearance: none; width: 18px; height: 18px; border: 1px solid var(--line-2); border-radius: 3px; margin: 2px 0 0; flex: none; display: grid; place-items: center; background: var(--panel) }
+.check input:checked { background: var(--gold); border-color: var(--gold) }
+.check input:checked::after { content: "✓"; color: #0A0F1C; font-size: 12px; font-weight: 700 }
+.meter { height: 4px; background: var(--line); border-radius: 2px; overflow: hidden }
+.meter i { display: block; height: 100%; background: var(--gold); width: 0; transition: width .3s }
+.feedback { font-family: var(--f-mono); font-size: .8rem; min-height: 1.3em; color: var(--muted) }
+.feedback.ok { color: var(--up) } .feedback.bad { color: var(--down) }
+
+/* Botones y formularios */
+.btn { background: var(--gold); color: #0A0F1C; border: 1px solid var(--gold); border-radius: 4px; padding: 9px 16px; font-family: var(--f-mono); font-size: .75rem; letter-spacing: .1em; text-transform: uppercase; font-weight: 600 }
+.btn.ghost { background: transparent; color: var(--gold) }
+.btn.big { padding: 13px 20px; font-size: .82rem }
+.btn:hover { filter: brightness(1.08) }
+.btn:disabled { opacity: .45; cursor: default }
+.btns { display: flex; gap: 8px; flex-wrap: wrap; align-items: center }
+.chips { display: flex; gap: 6px; flex-wrap: wrap }
+.chip { border: 1px solid var(--line-2); background: transparent; color: var(--muted); border-radius: 4px; padding: 7px 12px; font-size: .85rem; font-family: var(--f-body) }
+.chip.sm { padding: 4px 10px; font-size: .75rem; font-family: var(--f-mono) }
+.chip[aria-pressed="true"] { border-color: var(--gold); color: #0A0F1C; background: var(--gold) }
+.chip[aria-pressed="true"].g-up { background: var(--up); border-color: var(--up) }
+.chip[aria-pressed="true"].g-down { background: var(--down); border-color: var(--down) }
+.field { display: grid; gap: 6px; min-width: 0 }
+.field > label, .field > span { font-family: var(--f-mono); font-size: .65rem; letter-spacing: .14em; text-transform: uppercase; color: var(--muted) }
+.field output { font-family: var(--f-mono); font-weight: 500; color: var(--gold-2) }
+.inp { width: 100%; min-width: 0; border: 1px solid var(--line-2); border-radius: 6px; padding: 10px 12px; font: inherit; background: #070C18; color: var(--ink) }
+.inp:focus { border-color: var(--gold); outline: none }
+input[type=range] { width: 100%; accent-color: var(--gold) }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px }
+.row3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px }
+
+/* Login */
+#login { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; padding: 16px; background: rgba(6,10,19,.94); backdrop-filter: blur(6px) }
+#login .panel { width: min(400px, 100%); gap: 16px; padding: 28px }
+#login h1 { font-family: var(--f-display); font-size: 3rem }
+#login h1 i { color: var(--gold) }
+
+/* Diálogo de operación */
+dialog { border: 1px solid var(--line-2); border-radius: 12px; padding: 0; background: var(--panel); color: var(--ink); width: min(620px, calc(100vw - 24px)); max-height: calc(100dvh - 24px) }
+dialog::backdrop { background: rgba(3,6,12,.75); backdrop-filter: blur(3px) }
+dialog form { display: grid; gap: 16px; padding: 22px }
+
+/* Diario */
+.kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 10px; overflow: hidden }
+.kpis > div { background: var(--panel); padding: 16px 18px; display: grid; gap: 6px; align-content: start }
+.kpis span { font-family: var(--f-mono); font-size: .65rem; letter-spacing: .14em; text-transform: uppercase; color: var(--muted) }
+.kpis b { font-family: var(--f-mono); font-size: 2rem; font-weight: 500; line-height: 1; letter-spacing: -.02em }
+.kpis small { color: var(--muted); font-size: .8rem }
+.wbar { position: relative; height: 6px; background: var(--line); border-radius: 3px; margin-top: 4px }
+.wbar i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 3px; background: var(--gold) }
+.wbar em { position: absolute; top: -4px; bottom: -4px; width: 2px; background: var(--ink); opacity: .7 }
+.brk { display: grid }
+.brk > div { display: grid; grid-template-columns: minmax(90px, 140px) 1fr 52px 74px; gap: 12px; align-items: center; padding: 9px 0; border-top: 1px solid var(--line); font-size: .9rem }
+.brk > div:first-child { border-top: 0 }
+.brk .n { font-family: var(--f-mono); font-size: .75rem; color: var(--muted) }
+.brk .pc, .brk .pl { font-family: var(--f-mono); text-align: right; font-size: .85rem }
+.brk .few { opacity: .45 }
+.insights { display: grid; gap: 8px }
+.insights p { border-left: 2px solid var(--gold); padding: 6px 12px; background: var(--gold-soft); font-size: .93rem }
+.ops { display: grid; font-size: .88rem }
+.op { display: grid; grid-template-columns: 92px 44px 1fr auto 28px; gap: 10px; align-items: center; padding: 9px 0; border-top: 1px solid var(--line) }
+.op:first-child { border-top: 0 }
+.op .d { font-family: var(--f-mono); font-size: .75rem; color: var(--muted); line-height: 1.3 }
+.op .acc { font-family: var(--f-mono); font-size: .6rem; letter-spacing: .12em; text-transform: uppercase; border: 1px solid var(--line-2); border-radius: 2px; padding: 1px 4px; text-align: center; color: var(--muted) }
+.op .acc.real { color: var(--gold); border-color: var(--gold) }
+.op .pl { font-family: var(--f-mono); text-align: right }
+.op .x { background: none; border: 0; color: var(--dim); font-size: 1.1rem; padding: 0 }
+.op .x:hover { color: var(--down) }
+.op .m { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.empty { padding: 30px 10px; text-align: center; color: var(--muted); display: grid; gap: 12px; justify-items: center }
+
+/* Aprender */
+.intro { display: grid; gap: 8px; padding-bottom: 6px }
+.intro .headline { font-size: clamp(1.9rem, 4vw, 2.7rem) }
+.lessons { display: grid; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--panel) }
+details.lesson { border-top: 1px solid var(--line) }
+details.lesson:first-child { border-top: 0 }
+details.lesson summary { list-style: none; cursor: pointer; padding: 16px 20px; display: flex; gap: 16px; align-items: baseline }
+details.lesson summary::-webkit-details-marker { display: none }
+details.lesson summary:hover { background: var(--panel-2) }
+details.lesson summary .n { font-family: var(--f-mono); color: var(--gold); font-size: .8rem; width: 26px; flex: none }
+details.lesson summary .tt { font-family: var(--f-display); font-size: 1.3rem }
+details.lesson summary .lvl { margin-left: auto; font-family: var(--f-mono); font-size: .65rem; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); flex: none }
+details.lesson[open] summary .tt { color: var(--gold-2) }
+details.lesson .body { padding: 0 20px 20px 62px; display: grid; gap: 12px; max-width: 76ch; color: #C3CBDC }
+details.lesson ul { margin: 0; padding-left: 18px; display: grid; gap: 6px }
+details.lesson li::marker { color: var(--gold) }
+.lab-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; align-items: end }
+.stat { display: grid; gap: 4px }
+.stat > span:first-child { font-family: var(--f-mono); font-size: .65rem; letter-spacing: .14em; text-transform: uppercase; color: var(--muted) }
+.big { font-family: var(--f-mono); font-size: 2.4rem; font-weight: 500; line-height: 1; letter-spacing: -.02em }
+canvas { width: 100%; display: block; border-radius: 6px; background: #070C18; border: 1px solid var(--line) }
+.legend { display: flex; gap: 18px; flex-wrap: wrap; font-family: var(--f-mono); font-size: .75rem; color: var(--muted) }
+.legend i { display: inline-block; width: 14px; height: 2px; vertical-align: middle; margin-right: 8px }
+footer { font-family: var(--f-mono); font-size: .7rem; letter-spacing: .04em; color: var(--dim); padding-block: 10px 30px; border-top: 1px solid var(--line) }
+.toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--panel-2); border: 1px solid var(--gold); color: var(--ink); padding: 10px 16px; border-radius: 6px; font-size: .9rem; z-index: 30; max-width: calc(100vw - 32px) }
+
+@media (max-width: 860px) { .hero, .grid2 { grid-template-columns: 1fr } .kpis { grid-template-columns: 1fr 1fr } .chart { height: 420px } }
+@media (max-width: 560px) {
+  .clock .hide-sm { display: none }
+  details.lesson .body { padding-left: 20px }
+  .tl-list div { grid-template-columns: 1fr; gap: 2px }
+  .panel { padding: 16px }
+  .row3 { grid-template-columns: 1fr 1fr }
+  .brk > div { grid-template-columns: 1fr 52px 70px; }
+  .brk .wbar { grid-column: 1 / -1; grid-row: 2 }
+  .op { grid-template-columns: 74px 1fr auto 24px }
+  .op .acc { display: none }
+  .why div { grid-template-columns: 1fr; gap: 2px }
+  .chart { height: 380px }
+  .tab { padding: 7px 10px }
+}
+@media (prefers-reduced-motion: reduce) { .status .led { animation: none } * { transition: none !important } }
+</style>
+</head>
+<body>
+
+<!-- Cinta en vivo (TradingView, gratis) -->
+<div class="tape">
+  <div class="tradingview-widget-container"><div class="tradingview-widget-container__widget"></div>
+  <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-ticker-tape.js" async>
+  {"symbols":[{"proName":"FX:EURUSD","title":"EUR/USD"},{"proName":"TVC:DXY","title":"Dólar (DXY)"},{"proName":"OANDA:XAUUSD","title":"Oro"},{"proName":"FOREXCOM:SPXUSD","title":"S&P 500"},{"proName":"BITSTAMP:BTCUSD","title":"Bitcoin"},{"proName":"FX:GBPUSD","title":"GBP/USD"},{"proName":"FX:USDJPY","title":"USD/JPY"}],"showSymbolLogo":true,"isTransparent":true,"displayMode":"adaptive","colorTheme":"dark","locale":"es"}
+  </script></div>
+</div>
+
+<header>
+  <div class="wrap">
+    <div class="hbar">
+      <div class="brand"><h1>Pulso<i>.</i></h1></div>
+      <div class="tabs" role="tablist">
+        <button class="tab" role="tab" id="tab-hoy" aria-selected="true" aria-controls="hoy">Hoy</button>
+        <button class="tab" role="tab" id="tab-diario" aria-selected="false" aria-controls="diario">Diario</button>
+        <button class="tab" role="tab" id="tab-aprender" aria-selected="false" aria-controls="aprender">Aprender</button>
+      </div>
+      <div class="clock"><span class="mkt hide-sm"><span class="dot" id="mktDot"></span><span id="mktTxt">—</span></span><span>LIMA <b id="clock">--:--</b></span><button class="linkbtn" id="logout" hidden>Salir</button></div>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+<!-- ============ HOY ============ -->
+<main id="hoy" role="tabpanel" aria-labelledby="tab-hoy">
+  <div id="weekend" class="notice" hidden>Hoy es fin de semana: en IQ Option solo hay activos <b>OTC</b>, cuyos precios genera el propio bróker. Las noticias no les aplican. Si practicas, que sea en demo.</div>
+
+  <section class="hero">
+    <div class="panel" style="gap:16px">
+      <div class="phead"><span class="label" id="vDate">Hoy</span><span class="label">Semáforo personal</span></div>
+      <span class="status" id="vPill"><span class="led"></span><span id="vPillTxt">Calculando</span></span>
+      <h2 class="headline" id="vTitle">Revisando tu mañana…</h2>
+      <p class="summary" id="vSummary"></p>
+      <div class="why">
+        <div><span><i class="sq" id="wH"></i>Horario</span><p id="wHt">—</p></div>
+        <div><span><i class="sq" id="wN"></i>Noticias</span><p id="wNt">—</p></div>
+        <div><span><i class="sq" id="wD"></i>Tu día</span><p id="wDt">—</p></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="phead"><h3>Tu día</h3><span class="label">Cuenta real</span></div>
+      <div style="display:grid;gap:4px">
+        <span class="label" style="color:var(--muted)">Resultado de hoy</span>
+        <span class="bignum" id="dNet">$0.00</span>
+        <div class="goldrule"></div>
+      </div>
+      <div class="kv">
+        <div><span>Operaciones</span><b id="dOps">0 / 3</b></div>
+        <div><span>Ganadas · perdidas</span><b id="dWL">0 · 0</b></div>
+        <div><span>Pérdidas seguidas</span><b id="dStreak">0</b></div>
+        <div><span>En demo hoy</span><b id="dDemo">0</b></div>
+      </div>
+      <button class="btn big" id="addOp1">+ Registrar operación</button>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="phead"><h3>Tu mañana, hora de Lima</h3><span class="label">06:00 — 12:00</span></div>
+    <div class="tl">
+      <div class="tl-bar" id="tlBar"><div class="tl-now" id="tlNow" hidden></div></div>
+      <div class="tl-ticks" id="tlTicks"></div>
+    </div>
+    <div class="tl-list" id="tlList"></div>
+  </section>
+
+  <section class="panel">
+    <div class="phead"><h3>EUR/USD en vivo</h3><span class="label">Velas de 5 min · hora de Lima</span></div>
+    <div class="chart">
+      <div class="tradingview-widget-container" style="height:100%;width:100%"><div class="tradingview-widget-container__widget" style="height:100%;width:100%"></div>
+      <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js" async>
+      {"autosize":true,"symbol":"FX:EURUSD","interval":"5","timezone":"America/Lima","theme":"dark","style":"1","locale":"es","backgroundColor":"rgba(11,18,34,1)","gridColor":"rgba(27,38,64,0.55)","allow_symbol_change":true,"calendar":false,"hide_volume":true,"support_host":"https://www.tradingview.com"}
+      </script></div>
+    </div>
+    <p class="muted" style="font-size:.85rem">El precio de IQ Option puede diferir unos pips del de este gráfico. Para entrar, guíate por el gráfico de IQ.</p>
+  </section>
+
+  <div class="grid2">
+    <section class="panel">
+      <div class="phead"><h3>Noticias de hoy</h3><span class="label">EE. UU. y Zona euro</span></div>
+      <div id="calStale" class="notice info" hidden></div>
+      <div class="events" id="events"></div>
+      <div id="weekBox" hidden style="display:grid;gap:10px">
+        <span class="label" style="color:var(--muted);padding-top:6px">Fuertes el resto de la semana</span>
+        <div class="events" id="weekEvents"></div>
+      </div>
+    </section>
+    <section class="panel">
+      <div class="phead"><h3>Antes de operar</h3><span class="label">Tu lista</span></div>
+      <div class="check" id="check">
+        <label><input type="checkbox" id="c1"> Miré el semáforo y sé a qué hora hay noticias fuertes</label>
+        <label><input type="checkbox" id="c2"> Marqué en el gráfico la tendencia, el soporte y la resistencia</label>
+        <label><input type="checkbox" id="c3"> Sé cuánto voy a arriesgar por operación (1–2% de mi cuenta)</label>
+        <label><input type="checkbox" id="c4"> Estoy tranquila: no vengo a recuperar pérdidas</label>
+        <label><input type="checkbox" id="c5"> Voy a registrar cada operación en el Diario</label>
+      </div>
+      <div class="meter"><i id="meter"></i></div>
+      <p class="feedback" id="checkMsg"></p>
+    </section>
+  </div>
+
+  <footer>Herramienta educativa, no da señales de compra o venta. Gráfico y cinta: TradingView. Calendario: Forex Factory, actualizado varias veces al día.</footer>
+</main>
+
+<!-- ============ DIARIO ============ -->
+<main id="diario" role="tabpanel" aria-labelledby="tab-diario" hidden>
+  <section class="intro">
+    <span class="label">Diario</span>
+    <h2 class="headline">Los números no mienten.</h2>
+    <p class="summary">Registra cada operación. Con el tiempo aquí vas a ver qué te funciona de verdad y qué no.</p>
+    <div class="btns" style="padding-top:6px"><button class="btn big" id="addOp2">+ Registrar operación</button></div>
+  </section>
+
+  <div class="btns" style="justify-content:space-between">
+    <div class="chips" id="fPer" role="group" aria-label="Periodo">
+      <button class="chip sm" data-v="7" aria-pressed="false">7 días</button>
+      <button class="chip sm" data-v="30" aria-pressed="false">30 días</button>
+      <button class="chip sm" data-v="all" aria-pressed="true">Todo</button>
+    </div>
+    <div class="chips" id="fAcc" role="group" aria-label="Cuenta">
+      <button class="chip sm" data-v="all" aria-pressed="true">Real + demo</button>
+      <button class="chip sm" data-v="real" aria-pressed="false">Real</button>
+      <button class="chip sm" data-v="demo" aria-pressed="false">Demo</button>
+    </div>
+  </div>
+
+  <div class="kpis">
+    <div><span>Operaciones</span><b id="kN">0</b><small id="kNs">—</small></div>
+    <div><span>Aciertos</span><b id="kW">—</b><div class="wbar"><i id="kWbar"></i><em id="kBE"></em></div><small id="kWs">Necesitas 54.1% para no perder</small></div>
+    <div><span>Ganancia neta</span><b id="kP">$0.00</b><small id="kPs">—</small></div>
+    <div><span>Siguiendo tus reglas</span><b id="kR">—</b><small id="kRs">—</small></div>
+  </div>
+
+  <section class="panel">
+    <div class="phead"><h3>Lo que dicen tus números</h3><span class="label">Conclusiones</span></div>
+    <div class="insights" id="insights"></div>
+  </section>
+
+  <section class="panel">
+    <div class="phead"><h3>Tu curva</h3><span class="label">Ganancia acumulada</span></div>
+    <canvas id="curve" height="220" aria-label="Gráfico de ganancia acumulada"></canvas>
+  </section>
+
+  <div class="grid2">
+    <section class="panel">
+      <div class="phead"><h3>Por motivo</h3><span class="label">¿Por qué entraste?</span></div>
+      <div class="brk" id="bMot"></div>
+    </section>
+    <section class="panel">
+      <div class="phead"><h3>Por hora</h3><span class="label">Hora de Lima</span></div>
+      <div class="brk" id="bHora"></div>
+    </section>
+  </div>
+  <div class="grid2">
+    <section class="panel">
+      <div class="phead"><h3>Por emoción</h3><span class="label">¿Cómo estabas?</span></div>
+      <div class="brk" id="bEmo"></div>
+    </section>
+    <section class="panel">
+      <div class="phead"><h3>Por reglas y dirección</h3><span class="label">Disciplina</span></div>
+      <div class="brk" id="bReg"></div>
+    </section>
+  </div>
+
+  <section class="panel">
+    <div class="phead"><h3>Tus operaciones</h3><span class="label" id="opsCount"></span></div>
+    <div class="ops" id="ops"></div>
+    <div class="btns"><button class="btn ghost" id="moreOps" hidden>Ver más</button></div>
+  </section>
+
+  <section class="panel">
+    <div class="phead"><h3>Tus reglas</h3><span class="label">Ajustes</span></div>
+    <form id="ajForm" style="display:grid;gap:14px">
+      <div class="row2">
+        <div class="field"><label for="aMax">Máximo de operaciones por día</label><input class="inp num" id="aMax" type="number" min="1" max="50" step="1"></div>
+        <div class="field"><label for="aLoss">Cierro tras perder seguidas</label><input class="inp num" id="aLoss" type="number" min="1" max="20" step="1"></div>
+        <div class="field"><label for="aPago">Pago habitual de IQ (%)</label><input class="inp num" id="aPago" type="number" min="1" max="100" step="1"></div>
+        <div class="field"><label for="aMonto">Monto habitual por operación ($)</label><input class="inp num" id="aMonto" type="number" min="0" step="0.01" placeholder="opcional"></div>
+      </div>
+      <div class="btns"><button class="btn" type="submit">Guardar reglas</button><span class="feedback" id="ajMsg"></span></div>
+    </form>
+  </section>
+  <footer>Tus datos se guardan en tu propia base (Supabase) y solo tú puedes verlos con tu usuario.</footer>
+</main>
+
+<!-- ============ APRENDER ============ -->
+<main id="aprender" role="tabpanel" aria-labelledby="tab-aprender" hidden>
+  <section class="intro">
+    <span class="label">Academia</span>
+    <h2 class="headline">De empírica a metódica.</h2>
+    <p class="summary">Lecciones cortas, en orden. Lee una por día y practícala en la cuenta demo.</p>
+  </section>
+  <div class="lessons" id="lessons"></div>
+
+  <div class="grid2">
+    <section class="panel">
+      <div class="phead"><h3>¿Cuántas tienes que acertar?</h3><span class="label">Lab 01</span></div>
+      <p class="muted">En IQ, si ganas cobras un porcentaje. Si pierdes, pierdes todo lo que pusiste. Mueve el pago y mira cuántas de cada 100 operaciones tienes que acertar solo para quedar en cero.</p>
+      <div class="lab-row">
+        <div class="field"><label for="payout">Pago de IQ si ganas</label><input type="range" id="payout" min="60" max="95" value="85"><output id="payoutOut">85%</output></div>
+        <div class="field"><label for="winrate">Aciertos de cada 100</label><input type="range" id="winrate" min="30" max="75" value="55"><output id="winrateOut">55</output></div>
+      </div>
+      <div class="lab-row">
+        <div class="stat"><span>Punto de equilibrio</span><span class="big" id="beOut">54.1</span><span class="muted">aciertos de cada 100</span></div>
+        <div class="stat"><span>100 operaciones de $10</span><span class="big" id="evOut">+$0</span><span class="muted" id="evNote"></span></div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="phead"><h3>Riesgo fijo vs. martingala</h3><span class="label">Lab 02</span></div>
+      <p class="muted">Dos personas empiezan con $100 y hacen hasta 200 operaciones con la misma suerte. Una arriesga siempre $2. La otra duplica cada vez que pierde.</p>
+      <div class="lab-row">
+        <div class="field"><label for="simWin">Aciertos de cada 100</label><input type="range" id="simWin" min="40" max="65" value="52"><output id="simWinOut">52</output></div>
+        <div class="field"><label for="simPay">Pago de IQ</label><input type="range" id="simPay" min="70" max="95" value="85"><output id="simPayOut">85%</output></div>
+      </div>
+      <canvas id="simCanvas" height="220" aria-label="Gráfico del saldo de las dos estrategias"></canvas>
+      <div class="btns" style="justify-content:space-between">
+        <div class="legend"><span><i style="background:var(--gold)"></i>Riesgo fijo ($2)</span><span><i style="background:var(--down)"></i>Martingala</span></div>
+        <button class="btn" id="simRun">Simular otra vez</button>
+      </div>
+      <p id="simMsg" style="color:#C3CBDC"></p>
+    </section>
+  </div>
+
+  <section class="panel">
+    <div class="phead"><h3>Practica con el gráfico</h3><span class="label">Lab 03</span></div>
+    <div class="btns" role="group" aria-label="Tipo de práctica">
+      <button class="btn" id="modeTrend" aria-pressed="true">¿Cuál es la tendencia?</button>
+      <button class="btn ghost" id="modeSup" aria-pressed="false">Toca el soporte</button>
+      <span class="muted mono" id="score" style="margin-left:auto;font-size:.8rem"></span>
+    </div>
+    <p class="muted" id="pracHelp">Mira las velas y elige la tendencia.</p>
+    <canvas id="pracCanvas" height="320" aria-label="Gráfico de velas de práctica"></canvas>
+    <div class="btns" id="trendBtns">
+      <button class="btn ghost" data-ans="alcista">Alcista ↗</button>
+      <button class="btn ghost" data-ans="bajista">Bajista ↘</button>
+      <button class="btn ghost" data-ans="lateral">Lateral →</button>
+    </div>
+    <p class="feedback" id="pracMsg"></p>
+    <div class="btns"><button class="btn" id="pracNext">Otro gráfico</button></div>
+  </section>
+  <footer>Contenido educativo. El trading con opciones binarias o digitales tiene alto riesgo y la mayoría de las personas pierde dinero.</footer>
+</main>
+</div>
+
+<!-- Registrar operación -->
+<dialog id="opDlg" aria-labelledby="opTitle">
+  <form id="opForm" method="dialog" novalidate>
+    <div class="phead"><h3 id="opTitle">Nueva operación</h3><button type="button" class="linkbtn" id="opClose">Cerrar ✕</button></div>
+    <div class="field"><span>Cuenta</span><div class="chips" data-g="cuenta"></div></div>
+    <div class="field"><span>Dirección</span><div class="chips" data-g="direccion"></div></div>
+    <div class="row3">
+      <div class="field"><label for="fMonto">Monto ($)</label><input class="inp num" id="fMonto" type="number" min="0.01" step="0.01" inputmode="decimal" required></div>
+      <div class="field"><label for="fPago">Pago (%)</label><input class="inp num" id="fPago" type="number" min="1" max="100" step="1" inputmode="numeric" required></div>
+      <div class="field"><label for="fHora">Fecha y hora</label><input class="inp num" id="fHora" type="datetime-local" required></div>
+    </div>
+    <div class="field"><span>Vencimiento</span><div class="chips" data-g="venc"></div></div>
+    <div class="field"><span>Resultado</span><div class="chips" data-g="resultado"></div></div>
+    <div class="field"><span>¿Por qué entraste?</span><div class="chips" data-g="motivo"></div></div>
+    <div class="field"><span>¿Seguiste tus reglas?</span><div class="chips" data-g="reglas"></div></div>
+    <div class="field"><span>¿Cómo te sentías?</span><div class="chips" data-g="emocion"></div></div>
+    <div class="field"><label for="fNota">Nota (opcional)</label><input class="inp" id="fNota" type="text" maxlength="300" placeholder="Ej.: rebote en 1.0850 con mecha larga"></div>
+    <p class="feedback bad" id="opErr"></p>
+    <div class="btns"><button class="btn big" type="submit" id="opSave">Guardar operación</button></div>
+  </form>
+</dialog>
+
+<!-- Login -->
+<div id="login">
+  <form class="panel" id="loginForm">
+    <h1>Pulso<i>.</i></h1>
+    <p class="muted">Entra con tu usuario para ver tu diario.</p>
+    <div class="field"><label for="lEmail">Correo</label><input class="inp" id="lEmail" type="email" autocomplete="username" required></div>
+    <div class="field"><label for="lPass">Contraseña</label><input class="inp" id="lPass" type="password" autocomplete="current-password" required></div>
+    <button class="btn big" type="submit" id="lBtn">Entrar</button>
+    <p class="feedback bad" id="lErr"></p>
+  </form>
+</div>
+
+<script>
+(() => {
+  const SB_URL = "https://qublmgcnnewowwwcnmdf.supabase.co";
+  const SB_KEY = "sb_publishable_qp27jPFpPGdcRFisSWWuUg_bllHenjN"; // clave pública: la seguridad la da RLS
+  const $ = (id) => document.getElementById(id);
+  const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = String(text); return e; };
+  const store = { get(k) { try { return localStorage.getItem(k) } catch { return null } }, set(k, v) { try { localStorage.setItem(k, v) } catch {} } };
+  const css = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+  const money = (v) => (v < 0 ? "−$" : v > 0 ? "+$" : "$") + Math.abs(v).toFixed(2);
+  const pct = (v) => (v * 100).toFixed(1) + "%";
+  let toastT; const toast = (msg) => { let t = document.querySelector(".toast"); if (!t) { t = el("div", "toast"); document.body.append(t); } t.textContent = msg; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => t.hidden = true, 3200); };
+
+  /* ---------- Tiempo (Lima es UTC-5 todo el año; Londres y NY con su horario de verano vía Intl) ---------- */
+  const parts = (tz, d = new Date()) => {
+    const f = new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", weekday: "short", hour12: false });
+    const p = Object.fromEntries(f.formatToParts(d).map(x => [x.type, x.value]));
+    return { date: `${p.year}-${p.month}-${p.day}`, h: +p.hour % 24, m: +p.minute, wd: p.weekday, mins: (+p.hour % 24) * 60 + +p.minute };
+  };
+  const lima = (d) => parts("America/Lima", d);
+  const limaAt = (dateIso, mins) => { const [y, m, d] = dateIso.split("-").map(Number); return new Date(Date.UTC(y, m - 1, d, 5, 0) + mins * 60000); };
+  const hhmm = (mins) => `${String(Math.floor(mins / 60)).padStart(2, "0")}:${String(mins % 60).padStart(2, "0")}`;
+  const timeLima = (d) => { const p = lima(d); return hhmm(p.mins); };
+  const fmtDate = (iso) => { const [y, m, d] = iso.split("-").map(Number); return new Date(Date.UTC(y, m - 1, d, 12)).toLocaleDateString("es-PE", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" }); };
+  const isWeekend = (wd) => wd === "Sat" || wd === "Sun";
+  function sessions(d = new Date()) {
+    const L = parts("Europe/London", d), N = parts("America/New_York", d);
+    const lon = !isWeekend(L.wd) && L.mins >= 480 && L.mins < 990;   // 8:00–16:30 Londres
+    const ny = !isWeekend(N.wd) && N.mins >= 480 && N.mins < 1020;   // 8:00–17:00 Nueva York
+    return { lon, ny };
+  }
+
+  /* ---------- Pestañas ---------- */
+  const TABS = ["hoy", "diario", "aprender"];
+  const show = (name) => {
+    if (!TABS.includes(name)) name = "hoy";
+    for (const k of TABS) { $("tab-" + k).setAttribute("aria-selected", k === name); $(k).hidden = k !== name; }
+    store.set("pulso.tab", name);
+    if (name === "aprender") { drawSim(); drawPrac(); }
+    if (name === "diario") renderDiario();
+  };
+  TABS.forEach(k => $("tab-" + k).onclick = () => show(k));
+
+  /* ---------- Supabase ---------- */
+  const sb = window.supabase ? window.supabase.createClient(SB_URL, SB_KEY) : null;
+  let user = null, ops = [], ajustes = { max_operaciones: 3, max_perdidas_seguidas: 3, pago_habitual: 85, monto_habitual: null }, checklist = {};
+
+  async function boot(u) {
+    if (user && user.id === u.id) return;
+    user = u; $("login").hidden = true; $("logout").hidden = false;
+    const today = lima().date;
+    const [o, a, c] = await Promise.all([
+      sb.from("operaciones").select("*").order("fecha", { ascending: true }).limit(10000),
+      sb.from("ajustes").select("*").maybeSingle(),
+      sb.from("checklist_diario").select("items").eq("fecha", today).maybeSingle(),
+    ]);
+    if (o.error || a.error || c.error) toast("No pude cargar todos tus datos. Revisa tu conexión y recarga.");
+    ops = o.data || [];
+    if (a.data) ajustes = a.data;
+    checklist = (c.data && c.data.items) || {};
+    loadChecks(); fillAjustes(); renderHoy(); renderDiario();
+  }
+  function showLogin() { user = null; ops = []; $("login").hidden = false; $("logout").hidden = true; setTimeout(() => $("lEmail").focus(), 50); }
+
+  if (!sb) { $("lErr").textContent = "No cargó la conexión. Revisa tu internet y recarga la página."; }
+  else {
+    sb.auth.onAuthStateChange((_ev, session) => { if (session && session.user) boot(session.user); else showLogin(); });
+    $("loginForm").addEventListener("submit", async (e) => {
+      e.preventDefault(); $("lErr").textContent = ""; $("lBtn").disabled = true;
+      const { error } = await sb.auth.signInWithPassword({ email: $("lEmail").value.trim(), password: $("lPass").value });
+      $("lBtn").disabled = false;
+      if (error) $("lErr").textContent = /invalid/i.test(error.message) ? "Correo o contraseña incorrectos." : "No pude entrar: " + error.message;
+      else $("lPass").value = "";
+    });
+    $("logout").onclick = async () => { await sb.auth.signOut(); };
+  }
+
+  /* ---------- Cálculos del diario ---------- */
+  const pl = (o) => o.resultado === "gano" ? +o.monto * +o.pago / 100 : o.resultado === "perdio" ? -+o.monto : 0;
+  const opDate = (o) => lima(new Date(o.fecha)).date;
+  function stats(arr) {
+    let w = 0, l = 0, e = 0, net = 0, pagoSum = 0;
+    for (const o of arr) { if (o.resultado === "gano") w++; else if (o.resultado === "perdio") l++; else e++; net += pl(o); pagoSum += +o.pago; }
+    const dec = w + l, avgPago = arr.length ? pagoSum / arr.length : (+ajustes.pago_habitual || 85);
+    return { n: arr.length, w, l, e, dec, wr: dec ? w / dec : null, net, be: 1 / (1 + avgPago / 100) };
+  }
+  function lossStreak(arr) { let s = 0; for (let i = arr.length - 1; i >= 0; i--) { const r = arr[i].resultado; if (r === "perdio") s++; else if (r === "gano") break; } return s; }
+  const todayOps = () => { const t = lima().date; return ops.filter(o => opDate(o) === t); };
+
+  /* ---------- Calendario (Forex Factory, cacheado en el repo por una GitHub Action) ---------- */
+  let events = [], calOk = false, calNewest = 0;
+  const IMP = { High: "alto", Medium: "medio", Low: "bajo", Holiday: "feriado" };
+  const PAIS = { USD: "EE. UU.", EUR: "Zona euro" };
+  const TR = [
+    [/Non-Farm Employment Change/i, "Empleo de EE. UU. (NFP)"], [/Unemployment Claims/i, "Pedidos de subsidio por desempleo"], [/Unemployment Rate/i, "Tasa de desempleo"],
+    [/ADP Non-Farm/i, "Empleo privado (ADP)"], [/JOLTS/i, "Ofertas de empleo (JOLTS)"], [/Average Hourly Earnings/i, "Salarios por hora"],
+    [/Core CPI/i, "Inflación subyacente (IPC)"], [/CPI/i, "Inflación (IPC)"], [/Core PCE/i, "Inflación PCE subyacente"], [/PPI/i, "Precios al productor"],
+    [/Federal Funds Rate/i, "Tasa de interés de la Fed"], [/FOMC Meeting Minutes/i, "Minutas de la Fed"], [/FOMC/i, "Fed (FOMC)"], [/Fed Chair|Powell/i, "Habla el presidente de la Fed"],
+    [/Main Refinancing Rate/i, "Tasa de interés del BCE"], [/ECB Press Conference/i, "Conferencia del BCE"], [/Lagarde/i, "Habla Lagarde (BCE)"], [/Monetary Policy/i, "Política monetaria"],
+    [/Advance GDP|Prelim GDP|Final GDP|GDP/i, "PIB (crecimiento)"], [/Core Retail Sales/i, "Ventas minoristas subyacentes"], [/Retail Sales/i, "Ventas minoristas"],
+    [/ISM Manufacturing PMI/i, "ISM manufactura"], [/ISM Services PMI/i, "ISM servicios"], [/Manufacturing PMI/i, "PMI manufactura"], [/Services PMI/i, "PMI servicios"],
+    [/Consumer Confidence|Consumer Sentiment/i, "Confianza del consumidor"], [/Durable Goods/i, "Pedidos de bienes duraderos"], [/Ifo/i, "Clima empresarial Ifo (Alemania)"],
+    [/ZEW/i, "Confianza ZEW (Alemania)"], [/Bank Holiday/i, "Feriado bancario"], [/Speaks/i, "Discurso"], [/Trade Balance/i, "Balanza comercial"],
+    [/Pending Home Sales|Existing Home Sales|New Home Sales|Building Permits|Housing Starts/i, "Vivienda"], [/Industrial Production/i, "Producción industrial"],
+  ];
+  const tr = (t) => { for (const [re, s] of TR) if (re.test(t)) return s; return t; };
+  async function loadCal() {
+    try {
+      const r = await fetch("data/calendario.json?t=" + Math.floor(Date.now() / 600000), { cache: "no-store" });
+      if (!r.ok) throw 0;
+      const raw = await r.json();
+      events = raw.filter(x => PAIS[x.country]).map(x => ({ t: new Date(x.date), title: x.title, es: tr(x.title), pais: x.country, imp: IMP[x.impact] || "bajo" })).filter(x => !isNaN(x.t)).sort((a, b) => a.t - b.t);
+      calNewest = raw.reduce((m, x) => Math.max(m, +new Date(x.date) || 0), 0);
+      calOk = true;
+    } catch { calOk = false; }
+    renderHoy();
+  }
+
+  /* ---------- Semáforo ---------- */
+  const RANK = { verde: 0, amarillo: 1, rojo: 2 };
+  const worst = (...s) => s.reduce((a, b) => RANK[b] > RANK[a] ? b : a, "verde");
+  function newsStateAt(d, wide) {
+    // rojo: noticia fuerte ±15 min · amarillo: fuerte en 15–45 min (solo para "ahora") o media ±10 min
+    let st = "verde", why = null;
+    for (const e of events) {
+      const diff = (e.t - d) / 60000;
+      if (e.imp === "alto" && Math.abs(diff) <= 15) return { st: "rojo", e, diff };
+      if (wide && e.imp === "alto" && diff > 15 && diff <= 45 && RANK[st] < 1) { st = "amarillo"; why = { e, diff }; }
+      if (e.imp === "medio" && Math.abs(diff) <= 10 && RANK[st] < 1) { st = "amarillo"; why = { e, diff }; }
+    }
+    return { st, ...(why || {}) };
+  }
+  function renderHoy() {
+    const now = new Date(), t = lima(now), wk = isWeekend(t.wd);
+    $("weekend").hidden = !wk;
+    $("vDate").textContent = fmtDate(t.date);
+
+    // 1) Horario
+    const s = sessions(now); let hS, hT;
+    if (wk) { hS = "rojo"; hT = "Fin de semana: el mercado real está cerrado, en IQ solo hay OTC."; }
+    else if (s.lon && s.ny) { hS = "verde"; hT = "Londres y Nueva York abiertos a la vez: el mejor horario para el EUR/USD."; }
+    else if (s.lon) { hS = "verde"; hT = "Londres abierto: el euro tiene movimiento."; }
+    else if (s.ny) { hS = "amarillo"; hT = "Solo Nueva York abierto: el euro suele ir más lento."; }
+    else { hS = "amarillo"; hT = "Londres y Nueva York cerrados: mercado lento y con movimientos raros."; }
+
+    // 2) Noticias
+    let nS = "verde", nT;
+    const todayEv = events.filter(e => lima(e.t).date === t.date);
+    const holiday = todayEv.find(e => e.imp === "feriado");
+    if (!calOk) { nS = "amarillo"; nT = "No pude leer el calendario. Revisa las noticias en Forex Factory antes de operar."; }
+    else {
+      const ns = newsStateAt(now, true);
+      if (ns.st === "rojo") { nS = "rojo"; nT = ns.diff > 0 ? `En ${Math.ceil(ns.diff)} min sale ${ns.e.es} (${PAIS[ns.e.pais]}). No operes hasta las ${timeLima(new Date(+ns.e.t + 15 * 60000))}.` : `Acaba de salir ${ns.e.es} (${PAIS[ns.e.pais]}). Espera hasta las ${timeLima(new Date(+ns.e.t + 15 * 60000))}.`; }
+      else if (ns.st === "amarillo") { nS = "amarillo"; nT = `${ns.e.es} (${PAIS[ns.e.pais]}) a las ${timeLima(ns.e.t)}. ${ns.e.imp === "alto" ? "Cierra lo que tengas abierto antes." : "Puede mover el precio un poco."}`; }
+      else {
+        const next = todayEv.find(e => e.imp === "alto" && e.t > now);
+        nT = next ? `Sin noticias encima. La próxima fuerte: ${next.es} a las ${timeLima(next.t)}.` : "Sin noticias fuertes pendientes hoy.";
+      }
+      if (holiday) { nS = worst(nS, "amarillo"); nT += ` Hoy es feriado en ${PAIS[holiday.pais]}: mercado más lento.`; }
+    }
+
+    // 3) Tu día (cuenta real)
+    const tops = todayOps(), real = tops.filter(o => o.cuenta === "real"), st = stats(real), streak = lossStreak(real);
+    const max = +ajustes.max_operaciones || 3, maxL = +ajustes.max_perdidas_seguidas || 3;
+    const nChecks = CHECKS.filter(c => checklist[c]).length;
+    let dS = "verde", dT = "Vas dentro de tus reglas.";
+    if (!user) { dS = "amarillo"; dT = "Entra con tu usuario para ver tu día."; }
+    else if (streak >= maxL) { dS = "rojo"; dT = `${streak} pérdidas seguidas: tu regla dice que cierras por hoy.`; }
+    else if (real.length >= max) { dS = "rojo"; dT = `Ya hiciste tus ${max} operaciones de hoy. Lo que sigue es demo o descanso.`; }
+    else if (nChecks < 5) { dS = "amarillo"; dT = `Te faltan ${5 - nChecks} puntos de tu lista "Antes de operar".`; }
+    else if (real.length) dT = `Llevas ${real.length} de ${max} operaciones. Te quedan ${max - real.length}.`;
+
+    const all = worst(hS, nS, dS);
+    let title, summary;
+    if (dS === "rojo") { title = "Cierra por hoy."; summary = dT; }
+    else if (wk) { title = "Fin de semana: solo OTC."; summary = "Si practicas, que sea en demo. Aprovecha para repasar el Diario o una lección."; }
+    else if (nS === "rojo") { title = "Espera: sale una noticia fuerte."; summary = nT; }
+    else if (all === "amarillo") { title = "Con cuidado."; summary = [hS, nS, dS].map((x, i) => x === "amarillo" ? [hT, nT, dT][i] : null).filter(Boolean)[0]; }
+    else { title = "Buen momento para operar con tu plan."; summary = "Horario activo, sin noticias encima y vas dentro de tus reglas."; }
+    const txt = { verde: "Puedes operar", amarillo: "Precaución", rojo: "No operes ahora" };
+    $("vPill").className = "status " + all; $("vPillTxt").textContent = txt[all];
+    $("vTitle").textContent = title; $("vSummary").textContent = summary;
+    $("wH").className = "sq " + hS; $("wHt").textContent = hT;
+    $("wN").className = "sq " + nS; $("wNt").textContent = nT;
+    $("wD").className = "sq " + dS; $("wDt").textContent = dT;
+
+    // Tu día
+    const dn = $("dNet"); dn.textContent = money(st.net); dn.className = "bignum " + (st.net > 0 ? "up" : st.net < 0 ? "down" : "");
+    $("dOps").textContent = `${real.length} / ${max}`; $("dOps").className = real.length >= max ? "down" : "";
+    $("dWL").textContent = `${st.w} · ${st.l}`;
+    $("dStreak").textContent = streak; $("dStreak").className = streak >= maxL ? "down" : streak ? "" : "";
+    $("dDemo").textContent = tops.length - real.length;
+
+    renderTimeline(t, wk); renderEvents(now, t, todayEv);
+    const ms = sessions(now);
+    $("mktDot").className = "dot" + (ms.lon || ms.ny ? " on" : "");
+    $("mktTxt").textContent = ms.lon && ms.ny ? "Londres + NY" : ms.lon ? "Londres abierto" : ms.ny ? "Nueva York abierto" : wk ? "Fin de semana" : "Sesión cerrada";
+  }
+
+  const TL_START = 6 * 60, TL_END = 12 * 60;
+  function renderTimeline(t, wk) {
+    const bar = $("tlBar"); bar.querySelectorAll(".tl-seg").forEach(x => x.remove());
+    const list = $("tlList"); list.replaceChildren();
+    const segs = [];
+    for (let m = TL_START; m < TL_END; m += 5) {
+      const d = limaAt(t.date, m + 2.5), s = sessions(d), n = newsStateAt(d, false);
+      let st, txt;
+      if (wk) { st = "rojo"; txt = "Fin de semana (solo OTC)"; }
+      else if (n.st === "rojo") { st = "rojo"; txt = `Noticia fuerte: ${n.e.es} (${timeLima(n.e.t)})`; }
+      else if (n.st === "amarillo") { st = "amarillo"; txt = `Noticia media: ${n.e.es} (${timeLima(n.e.t)})`; }
+      else if (s.lon && s.ny) { st = "verde"; txt = "Londres y Nueva York abiertos"; }
+      else if (s.lon) { st = "verde"; txt = "Londres abierto"; }
+      else { st = "amarillo"; txt = s.ny ? "Solo Nueva York abierto" : "Mercado lento"; }
+      const last = segs[segs.length - 1];
+      if (last && last.st === st && last.txt === txt) last.b = m + 5; else segs.push({ a: m, b: m + 5, st, txt });
+    }
+    const span = TL_END - TL_START;
+    for (const g of segs) {
+      const seg = el("div", "tl-seg " + g.st); seg.style.left = ((g.a - TL_START) / span * 100) + "%"; seg.style.width = ((g.b - g.a) / span * 100) + "%";
+      if (g.b - g.a >= 40) seg.textContent = hhmm(g.a);
+      seg.title = `${hhmm(g.a)}–${hhmm(g.b)} · ${g.txt}`;
+      bar.insertBefore(seg, $("tlNow"));
+      const row = el("div"); const left = el("span", "t"); left.append(el("i", "sq " + g.st), document.createTextNode(`${hhmm(g.a)}–${hhmm(g.b)}`));
+      row.append(left, el("span", null, g.txt)); list.append(row);
+    }
+    const ticks = $("tlTicks"); ticks.replaceChildren();
+    for (let h = 6; h <= 12; h++) { const sp = el("span", null, `${String(h).padStart(2, "0")}:00`); sp.style.left = ((h * 60 - TL_START) / span * 100) + "%"; ticks.append(sp); }
+    const n = $("tlNow"), inR = t.mins >= TL_START && t.mins <= TL_END;
+    n.hidden = !inR; if (inR) n.style.left = ((t.mins - TL_START) / span * 100) + "%";
+  }
+
+  function evRow(e, now, showDay) {
+    const row = el("div", "ev" + (e.t < now - 15 * 60000 ? " past" : ""));
+    row.append(el("span", "t", timeLima(e.t)));
+    const body = el("div"); body.style.display = "grid"; body.style.gap = "3px";
+    const top = el("div", "top"); top.append(el("b", null, e.es), el("span", "imp " + e.imp, e.imp), el("span", "sub", PAIS[e.pais]));
+    body.append(top);
+    const sub = []; if (showDay) sub.push(fmtDate(lima(e.t).date)); if (e.es !== e.title) sub.push(e.title);
+    if (sub.length) body.append(el("span", "sub", sub.join(" · ")));
+    row.append(body); return row;
+  }
+  function renderEvents(now, t, todayEv) {
+    const box = $("events"); box.replaceChildren();
+    const cs = $("calStale");
+    if (!calOk) { cs.hidden = false; cs.textContent = "No pude leer el calendario ahora. Puedes verlo en forexfactory.com (cambia la zona horaria a Lima)."; $("weekBox").hidden = true; return; }
+    cs.hidden = !(calNewest && calNewest < Date.now() - 36 * 3600000);
+    if (!cs.hidden) cs.textContent = "El calendario todavía es el de la semana pasada. Se actualiza solo en unas horas.";
+    const imp = todayEv.filter(e => e.imp !== "bajo");
+    const lows = todayEv.length - imp.length;
+    if (!imp.length) box.append(el("p", "muted", isWeekend(t.wd) ? "Fin de semana: no hay noticias." : "Hoy no hay noticias de impacto medio o alto para el EUR/USD."));
+    imp.forEach(e => box.append(evRow(e, now, false)));
+    if (lows) box.append(el("p", "sub", `+ ${lows} de impacto bajo (no suelen mover el precio).`));
+    const wb = $("weekEvents"); wb.replaceChildren();
+    const rest = events.filter(e => e.imp === "alto" && lima(e.t).date > t.date);
+    $("weekBox").hidden = !rest.length;
+    rest.slice(0, 8).forEach(e => wb.append(evRow(e, now, true)));
+  }
+
+  /* ---------- Checklist (en Supabase, una fila por día) ---------- */
+  const CHECKS = ["c1", "c2", "c3", "c4", "c5"];
+  let checkDate = lima().date;
+  function loadChecks() { CHECKS.forEach(c => $(c).checked = !!checklist[c]); checkMsg(); }
+  function checkMsg() {
+    const n = CHECKS.filter(c => $(c).checked).length, m = $("checkMsg");
+    $("meter").style.width = (n / 5 * 100) + "%";
+    m.className = "feedback " + (n === 5 ? "ok" : "");
+    m.textContent = n === 5 ? "LISTA COMPLETA. A OPERAR CON TUS REGLAS." : `${n} DE 5 LISTOS`;
+  }
+  CHECKS.forEach(c => $(c).addEventListener("change", async () => {
+    CHECKS.forEach(x => checklist[x] = $(x).checked); checkMsg(); renderHoy();
+    if (!user) return;
+    const { error } = await sb.from("checklist_diario").upsert({ user_id: user.id, fecha: lima().date, items: checklist });
+    if (error) toast("No se guardó tu lista. Revisa tu conexión.");
+  }));
+
+  /* ---------- Registrar operación ---------- */
+  const GROUPS = {
+    cuenta: [["real", "Real"], ["demo", "Demo"]],
+    direccion: [["arriba", "▲ Arriba", "g-up"], ["abajo", "▼ Abajo", "g-down"]],
+    venc: [["1", "1 min"], ["2", "2 min"], ["5", "5 min"], ["15", "15 min"]],
+    resultado: [["gano", "Gané", "g-up"], ["perdio", "Perdí", "g-down"], ["empate", "Empate"]],
+    motivo: [["tendencia", "Tendencia"], ["soporte_resistencia", "Soporte / resistencia"], ["ruptura", "Ruptura"], ["noticia", "Noticia"], ["corazonada", "Corazonada"], ["otro", "Otro"]],
+    reglas: [["si", "Sí"], ["no", "No"]],
+    emocion: [["tranquila", "Tranquila"], ["ansiosa", "Ansiosa"], ["recuperar", "Quería recuperar"], ["euforica", "Eufórica"], ["cansada", "Cansada"]],
+  };
+  const LABEL = Object.fromEntries(Object.entries(GROUPS).map(([g, a]) => [g, Object.fromEntries(a.map(([v, l]) => [v, l.replace(/^[▲▼]\s*/, "")]))]));
+  const sel = {};
+  document.querySelectorAll("[data-g]").forEach(box => {
+    const g = box.dataset.g;
+    for (const [v, l, cls] of GROUPS[g]) {
+      const b = el("button", "chip" + (cls ? " " + cls : ""), l); b.type = "button"; b.dataset.v = v; b.setAttribute("aria-pressed", "false");
+      b.onclick = () => setSel(g, sel[g] === v && g !== "cuenta" ? null : v);
+      box.append(b);
+    }
+  });
+  function setSel(g, v) { sel[g] = v; document.querySelectorAll(`[data-g="${g}"] .chip`).forEach(b => b.setAttribute("aria-pressed", b.dataset.v === v)); }
+  function openOp() {
+    if (!user) { showLogin(); return; }
+    Object.keys(GROUPS).forEach(g => setSel(g, null));
+    setSel("cuenta", store.get("pulso.cuenta") || "real");
+    const lv = store.get("pulso.venc"); if (lv) setSel("venc", lv);
+    $("fMonto").value = ajustes.monto_habitual != null ? ajustes.monto_habitual : (store.get("pulso.monto") || "");
+    $("fPago").value = store.get("pulso.pago") || ajustes.pago_habitual || 85;
+    const t = lima(); $("fHora").value = `${t.date}T${hhmm(t.mins)}`;
+    $("fNota").value = ""; $("opErr").textContent = "";
+    $("opDlg").showModal();
+  }
+  $("addOp1").onclick = openOp; $("addOp2").onclick = openOp;
+  $("opClose").onclick = () => $("opDlg").close();
+  $("opForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const err = $("opErr"), monto = parseFloat($("fMonto").value), pago = parseFloat($("fPago").value), hora = $("fHora").value;
+    const miss = [];
+    if (!sel.direccion) miss.push("dirección"); if (!sel.resultado) miss.push("resultado"); if (!sel.motivo) miss.push("por qué entraste"); if (!sel.reglas) miss.push("si seguiste tus reglas");
+    if (!(monto > 0)) miss.push("monto"); if (!(pago > 0 && pago <= 100)) miss.push("pago (1 a 100)"); if (!hora) miss.push("fecha y hora");
+    if (miss.length) { err.textContent = "Falta: " + miss.join(", ") + "."; return; }
+    const fecha = new Date(hora + ":00-05:00");
+    const row = { user_id: user.id, fecha: fecha.toISOString(), cuenta: sel.cuenta || "real", direccion: sel.direccion, monto, pago, vencimiento_min: sel.venc ? +sel.venc : null,
+      resultado: sel.resultado, motivo: sel.motivo, siguio_reglas: sel.reglas === "si", emocion: sel.emocion || null, nota: $("fNota").value.trim() || null };
+    $("opSave").disabled = true; err.textContent = "";
+    const { data, error } = await sb.from("operaciones").insert(row).select().single();
+    $("opSave").disabled = false;
+    if (error) { err.textContent = "No se guardó: " + error.message; return; }
+    ops.push(data); ops.sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
+    store.set("pulso.cuenta", row.cuenta); store.set("pulso.pago", String(pago)); store.set("pulso.monto", String(monto)); if (sel.venc) store.set("pulso.venc", sel.venc);
+    $("opDlg").close();
+    toast(row.resultado === "gano" ? `Guardada: ${money(pl(data))}` : row.resultado === "perdio" ? `Guardada: ${money(pl(data))}. Respira antes de la siguiente.` : "Guardada: empate.");
+    renderHoy(); renderDiario();
+  });
+
+  /* ---------- Diario ---------- */
+  const filt = { per: "all", acc: "all" };
+  const bindFilter = (id, key) => $(id).querySelectorAll(".chip").forEach(b => b.onclick = () => {
+    filt[key] = b.dataset.v; $(id).querySelectorAll(".chip").forEach(x => x.setAttribute("aria-pressed", x === b)); renderDiario();
+  });
+  bindFilter("fPer", "per"); bindFilter("fAcc", "acc");
+  function filtered() {
+    const since = filt.per === "all" ? 0 : Date.now() - (+filt.per) * 86400000;
+    return ops.filter(o => (filt.acc === "all" || o.cuenta === filt.acc) && new Date(o.fecha) >= since);
+  }
+  function brkRows(box, groups, beGlobal) {
+    box.replaceChildren();
+    const rows = groups.filter(g => g.arr.length);
+    if (!rows.length) { box.append(el("p", "muted", "Sin datos todavía.")); return; }
+    for (const g of rows) {
+      const s = stats(g.arr), row = el("div"); if (s.dec < 5) row.className = "few";
+      const lab = el("span"); lab.append(el("span", null, g.label + " "), el("span", "n", `(${s.n})`));
+      const bar = el("div", "wbar"); const fill = el("i"); fill.style.width = s.wr != null ? (s.wr * 100) + "%" : "0"; fill.style.background = s.wr == null ? "var(--dim)" : s.wr >= s.be ? "var(--up)" : "var(--down)";
+      const mk = el("em"); mk.style.left = (beGlobal * 100) + "%"; bar.append(fill, mk);
+      const pc = el("span", "pc", s.wr != null ? Math.round(s.wr * 100) + "%" : "—");
+      const p = el("span", "pl " + (s.net > 0 ? "up" : s.net < 0 ? "down" : ""), money(s.net));
+      row.append(lab, bar, pc, p); box.append(row);
+    }
+  }
+  let opsShown = 30;
+  function renderDiario() {
+    const arr = filtered(), s = stats(arr);
+    $("kN").textContent = s.n;
+    $("kNs").textContent = s.n ? `${s.w} ganadas · ${s.l} perdidas${s.e ? ` · ${s.e} empates` : ""}` : "Registra tu primera operación";
+    const kw = $("kW"); kw.textContent = s.wr != null ? pct(s.wr) : "—"; kw.className = s.wr == null ? "" : s.wr >= s.be ? "up" : "down";
+    $("kWbar").style.width = s.wr != null ? (s.wr * 100) + "%" : "0"; $("kWbar").style.background = s.wr == null ? "var(--dim)" : s.wr >= s.be ? "var(--up)" : "var(--down)";
+    $("kBE").style.left = (s.be * 100) + "%";
+    $("kWs").textContent = `Necesitas ${pct(s.be)} para no perder (la raya blanca)`;
+    const kp = $("kP"); kp.textContent = money(s.net); kp.className = s.net > 0 ? "up" : s.net < 0 ? "down" : "";
+    const invested = arr.reduce((m, o) => m + +o.monto, 0);
+    $("kPs").textContent = s.n ? `Promedio ${money(s.net / s.n)} por operación` : "—";
+    const yes = arr.filter(o => o.siguio_reglas), sy = stats(yes);
+    const kr = $("kR"); kr.textContent = s.n ? Math.round(yes.length / s.n * 100) + "%" : "—"; kr.className = "";
+    $("kRs").textContent = s.n ? `${yes.length} de ${s.n} operaciones` : "—";
+
+    // Conclusiones
+    const ins = $("insights"); ins.replaceChildren();
+    const say = (t) => ins.append(el("p", null, t));
+    if (!s.n) say("Todavía no hay operaciones aquí. Cada vez que operes, toca “+ Registrar operación”. Toma 15 segundos.");
+    else {
+      if (s.dec < 30) say(`Llevas ${s.dec} operaciones con resultado. Con menos de 30, los porcentajes todavía cambian mucho por suerte: sigue registrando antes de sacar conclusiones fuertes.`);
+      if (s.wr != null && s.dec >= 10) say(s.wr >= s.be ? `Aciertas ${pct(s.wr)} y necesitas ${pct(s.be)}: estás por encima del punto de equilibrio. Lo difícil ahora es sostenerlo.` : `Aciertas ${pct(s.wr)} y necesitas ${pct(s.be)} solo para no perder. Te faltan ${((s.be - s.wr) * 100).toFixed(1)} puntos.`);
+      const no = arr.filter(o => !o.siguio_reglas), sn = stats(no);
+      if (sy.dec >= 5 && sn.dec >= 5) say(`Cuando sigues tus reglas aciertas ${pct(sy.wr)} (${money(sy.net)}). Cuando no, ${pct(sn.wr)} (${money(sn.net)}).`);
+      const best = (key, map) => {
+        const g = {}; arr.forEach(o => { const k = map(o); if (k != null) (g[k] = g[k] || []).push(o); });
+        const r = Object.entries(g).map(([k, a]) => ({ k, s: stats(a) })).filter(x => x.s.dec >= 5).sort((a, b) => b.s.wr - a.s.wr);
+        return r.length >= 2 ? { top: r[0], low: r[r.length - 1] } : null;
+      };
+      const bm = best("motivo", o => o.motivo);
+      if (bm) say(`Tu mejor motivo para entrar es “${LABEL.motivo[bm.top.k]}” (${pct(bm.top.s.wr)}). El peor es “${LABEL.motivo[bm.low.k]}” (${pct(bm.low.s.wr)}).`);
+      const bh = best("hora", o => String(lima(new Date(o.fecha)).h).padStart(2, "0") + ":00");
+      if (bh) say(`Tu mejor hora es ${bh.top.k} (${pct(bh.top.s.wr)}). La peor, ${bh.low.k} (${pct(bh.low.s.wr)}).`);
+      const be = best("emocion", o => o.emocion);
+      if (be) say(`Cuando estás “${LABEL.emocion[be.low.k]}” aciertas ${pct(be.low.s.wr)}. Cuando estás “${LABEL.emocion[be.top.k]}”, ${pct(be.top.s.wr)}.`);
+      if (ins.childElementCount < 2) say("Cuando tengas al menos 5 operaciones en cada grupo (motivo, hora, emoción) aquí aparecen tus patrones.");
+    }
+
+    brkRows($("bMot"), GROUPS.motivo.map(([v, l]) => ({ label: l, arr: arr.filter(o => o.motivo === v) })), s.be);
+    const hours = [...new Set(arr.map(o => lima(new Date(o.fecha)).h))].sort((a, b) => a - b);
+    brkRows($("bHora"), hours.map(h => ({ label: `${String(h).padStart(2, "0")}:00`, arr: arr.filter(o => lima(new Date(o.fecha)).h === h) })), s.be);
+    brkRows($("bEmo"), [...GROUPS.emocion.map(([v, l]) => ({ label: l, arr: arr.filter(o => o.emocion === v) })), { label: "Sin anotar", arr: arr.filter(o => !o.emocion) }], s.be);
+    brkRows($("bReg"), [
+      { label: "Seguí mis reglas", arr: arr.filter(o => o.siguio_reglas) }, { label: "No las seguí", arr: arr.filter(o => !o.siguio_reglas) },
+      { label: "▲ Arriba", arr: arr.filter(o => o.direccion === "arriba") }, { label: "▼ Abajo", arr: arr.filter(o => o.direccion === "abajo") },
+    ], s.be);
+
+    // Lista
+    const box = $("ops"); box.replaceChildren();
+    const list = arr.slice().reverse();
+    $("opsCount").textContent = list.length ? `${list.length} en total` : "";
+    if (!list.length) { const e = el("div", "empty"); e.append(el("p", null, "Aún no hay operaciones con este filtro.")); box.append(e); }
+    for (const o of list.slice(0, opsShown)) {
+      const d = new Date(o.fecha), p = lima(d), row = el("div", "op");
+      const dt = el("span", "d"); dt.append(document.createTextNode(p.date.slice(5).split("-").reverse().join("/")), el("br"), document.createTextNode(hhmm(p.mins)));
+      const acc = el("span", "acc " + o.cuenta, o.cuenta);
+      const m = el("span", "m"); const arrow = el("b", o.direccion === "arriba" ? "up" : "down", o.direccion === "arriba" ? "▲ " : "▼ ");
+      m.append(arrow, document.createTextNode(`$${(+o.monto).toFixed(2)} · ${LABEL.motivo[o.motivo] || o.motivo}${o.siguio_reglas ? "" : " · sin reglas"}${o.nota ? " · " + o.nota : ""}`));
+      m.title = m.textContent;
+      const v = pl(o), plv = el("span", "pl " + (v > 0 ? "up" : v < 0 ? "down" : "flat"), o.resultado === "empate" ? "empate" : money(v));
+      const x = el("button", "x", "×"); x.type = "button"; x.title = "Borrar esta operación"; x.setAttribute("aria-label", "Borrar operación");
+      x.onclick = async () => {
+        if (!confirm("¿Borrar esta operación? No se puede deshacer.")) return;
+        const { error } = await sb.from("operaciones").delete().eq("id", o.id);
+        if (error) { toast("No se pudo borrar: " + error.message); return; }
+        ops = ops.filter(z => z.id !== o.id); renderDiario(); renderHoy();
+      };
+      row.append(dt, acc, m, plv, x); box.append(row);
+    }
+    $("moreOps").hidden = list.length <= opsShown;
+    drawCurve(arr);
+  }
+  $("moreOps").onclick = () => { opsShown += 50; renderDiario(); };
+
+  /* ---------- Ajustes ---------- */
+  function fillAjustes() {
+    $("aMax").value = ajustes.max_operaciones; $("aLoss").value = ajustes.max_perdidas_seguidas;
+    $("aPago").value = ajustes.pago_habitual; $("aMonto").value = ajustes.monto_habitual ?? "";
+  }
+  $("ajForm").addEventListener("submit", async (e) => {
+    e.preventDefault(); const m = $("ajMsg");
+    if (!user) { showLogin(); return; }
+    const row = { user_id: user.id, max_operaciones: Math.max(1, parseInt($("aMax").value) || 3), max_perdidas_seguidas: Math.max(1, parseInt($("aLoss").value) || 3),
+      pago_habitual: Math.min(100, Math.max(1, parseFloat($("aPago").value) || 85)), monto_habitual: $("aMonto").value === "" ? null : Math.max(0, parseFloat($("aMonto").value)) };
+    const { data, error } = await sb.from("ajustes").upsert(row).select().single();
+    if (error) { m.className = "feedback bad"; m.textContent = "No se guardó: " + error.message; return; }
+    ajustes = data; fillAjustes(); m.className = "feedback ok"; m.textContent = "GUARDADO"; setTimeout(() => m.textContent = "", 2500);
+    renderHoy(); renderDiario();
+  });
+
+  /* ---------- Canvas ---------- */
+  function prep(cv) {
+    const r = cv.getBoundingClientRect(); const dpr = window.devicePixelRatio || 1;
+    const w = Math.max(260, r.width), h = +cv.getAttribute("height");
+    cv.width = w * dpr; cv.height = h * dpr; cv.style.height = h + "px";
+    const c = cv.getContext("2d"); c.setTransform(dpr, 0, 0, dpr, 0, 0); return { c, w, h };
+  }
+  const MONO = "11px 'IBM Plex Mono', ui-monospace, monospace";
+  let curveArr = [];
+  function drawCurve(arr) {
+    if (arr) curveArr = arr;
+    const cv = $("curve"); if (!cv.offsetParent) return;
+    const { c, w, h } = prep(cv); const pad = { l: 56, r: 14, t: 14, b: 22 };
+    c.clearRect(0, 0, w, h);
+    const eq = [0]; curveArr.forEach(o => eq.push(eq[eq.length - 1] + pl(o)));
+    c.font = MONO;
+    if (eq.length < 2) { c.fillStyle = css("--dim"); c.fillText("Tu curva aparece cuando registres operaciones.", pad.l, h / 2); return; }
+    let max = Math.max(...eq), min = Math.min(...eq); if (max === min) { max += 1; min -= 1; }
+    const padv = (max - min) * 0.1; max += padv; min -= padv;
+    const X = (i) => pad.l + i / (eq.length - 1) * (w - pad.l - pad.r);
+    const Y = (v) => pad.t + (1 - (v - min) / (max - min)) * (h - pad.t - pad.b);
+    c.strokeStyle = css("--line"); c.fillStyle = css("--dim"); c.lineWidth = 1;
+    for (let k = 0; k <= 4; k++) { const v = min + (max - min) * k / 4; c.beginPath(); c.moveTo(pad.l, Y(v)); c.lineTo(w - pad.r, Y(v)); c.stroke(); c.fillText(money(v).replace("+", ""), 4, Y(v) + 4); }
+    c.setLineDash([3, 4]); c.strokeStyle = css("--muted"); c.beginPath(); c.moveTo(pad.l, Y(0)); c.lineTo(w - pad.r, Y(0)); c.stroke(); c.setLineDash([]);
+    const last = eq[eq.length - 1], col = last >= 0 ? css("--gold") : css("--down");
+    const g = c.createLinearGradient(0, pad.t, 0, h - pad.b); g.addColorStop(0, last >= 0 ? "rgba(214,179,106,.22)" : "rgba(255,92,97,.18)"); g.addColorStop(1, "rgba(0,0,0,0)");
+    c.fillStyle = g; c.beginPath(); eq.forEach((v, i) => i ? c.lineTo(X(i), Y(v)) : c.moveTo(X(i), Y(v))); c.lineTo(X(eq.length - 1), Y(0)); c.lineTo(X(0), Y(0)); c.closePath(); c.fill();
+    c.strokeStyle = col; c.lineWidth = 1.8; c.beginPath(); eq.forEach((v, i) => i ? c.lineTo(X(i), Y(v)) : c.moveTo(X(i), Y(v))); c.stroke();
+    c.fillStyle = col; c.beginPath(); c.arc(X(eq.length - 1), Y(last), 3.5, 0, 7); c.fill();
+  }
+
+  /* ---------- Lecciones ---------- */
+  const LESSONS = [
+    { t: "Velas japonesas", lvl: "Básico", body: [
+      ["p", "Cada vela resume lo que hizo el precio en un tiempo (1 minuto, 5 minutos…). Tiene un cuerpo (de dónde abrió a dónde cerró) y mechas (hasta dónde llegó)."],
+      ["ul", ["Vela verde: cerró más arriba de donde abrió. Ganaron los compradores.", "Vela roja: cerró más abajo. Ganaron los vendedores.", "Mecha larga arriba: el precio subió pero lo rechazaron. Mecha larga abajo: bajó pero lo rescataron.", "Cuerpo grande = fuerza. Cuerpo chiquito (doji) = duda."]],
+      ["tip", "Para vencimientos de 5 minutos en IQ, mira velas de 1 minuto para entrar y de 5 o 15 minutos para ver el panorama."] ] },
+    { t: "Tendencia: opera a favor de la corriente", lvl: "Básico", body: [
+      ["p", "La tendencia es la dirección general. Se ve en los máximos y mínimos, no en una sola vela."],
+      ["ul", ["Alcista: cada subida llega más alto y cada bajada se queda más arriba.", "Bajista: cada subida llega menos alto y cada bajada va más abajo.", "Lateral: el precio rebota entre un piso y un techo sin ir a ningún lado."]],
+      ["tip", "Regla simple: en tendencia alcista solo buscas operaciones ARRIBA. En bajista, solo ABAJO. En lateral, rebotes en el piso o el techo, o mejor no operas."] ] },
+    { t: "Soportes y resistencias", lvl: "Básico", body: [
+      ["p", "Un soporte es una zona donde el precio rebotó hacia arriba varias veces (un piso). Una resistencia es una zona donde lo frenaron hacia abajo (un techo)."],
+      ["ul", ["Son zonas, no líneas exactas. Piensa en una franja de unos pips.", "Mientras más veces tocó la zona, más importante es.", "Los números redondos (1.0900, 1.1000) suelen funcionar como soporte o resistencia.", "Si el precio rompe un soporte con fuerza, ese piso suele volverse techo."]],
+      ["tip", "No entres apenas el precio toca la zona. Espera una vela que muestre el rechazo (mecha larga) y entra en la siguiente."] ] },
+    { t: "Gestión del dinero", lvl: "Esencial", body: [
+      ["p", "Es lo que más separa a quien dura de quien quema la cuenta. Puedes tener buena lectura del gráfico y perderlo todo por arriesgar de más."],
+      ["ul", ["Arriesga 1–2% de tu cuenta por operación.", "Límite diario: 3 pérdidas seguidas o 5% de la cuenta, y cierras. El semáforo te avisa.", "Nunca dupliques después de perder (martingala). Míralo en el Lab 02.", "Con pago de 85% necesitas acertar 54 de cada 100 solo para no perder. Míralo en el Lab 01 y en tu Diario."]],
+      ["tip", "Si ganaste lo que planeaste en el día, también cierras. La codicia devuelve las ganancias."] ] },
+    { t: "Noticias y horarios (hora de Lima)", lvl: "Esencial", body: [
+      ["p", "El EUR/USD se mueve más cuando Europa y EE. UU. están trabajando al mismo tiempo, y se vuelve impredecible cuando salen datos importantes."],
+      ["ul", ["Londres abre a las 3:00 am de Lima entre fines de octubre y fines de marzo, y a las 2:00 am el resto del año (por el horario de verano de Europa).", "Los datos de EE. UU. salen a las 8:30 am de Lima entre noviembre y marzo, y a las 7:30 am el resto del año.", "Londres y Nueva York abiertos a la vez: más o menos de 8:00 a 11:30 am en invierno de allá, y de 7:00 a 10:30 am en verano. Ahí hay movimiento.", "Noticia de impacto alto: no operes 15 minutos antes ni 15 después.", "Feriados de EE. UU.: mercado lento y raro. Mejor demo."]],
+      ["tip", "No tienes que memorizar los cambios de horario: la barra de colores de la pestaña Hoy los calcula sola cada día."] ] },
+    { t: "Tu cabeza: revancha, euforia y rachas", lvl: "Esencial", body: [
+      ["p", "La mayoría de las pérdidas grandes no vienen de un mal análisis. Vienen de una mala emoción."],
+      ["ul", ["Revancha: perdiste y quieres recuperar ya. Es el momento de cerrar.", "Euforia: ganaste 3 seguidas y subes el monto. Ahí se devuelve todo.", "Las rachas existen por azar. 4 aciertos seguidos no significan que encontraste el secreto.", "Registra cada operación en el Diario con cómo te sentías. En un mes vas a ver la verdad en “Por emoción”."]],
+      ["tip", "Tu constancia no depende de las ganas del día. Depende de seguir la lista de la pestaña Hoy cada mañana."] ] },
+    { t: "Del trading a invertir", lvl: "Siguiente paso", body: [
+      ["p", "El trading de corto plazo es una actividad. Invertir es tener algo que crece con los años. La idea es que lo primero alimente lo segundo."],
+      ["ul", ["Regla del 50%: cada mes que cierres en ganancia, la mitad sale de IQ y va a inversión.", "Empieza por un fondo indexado (por ejemplo el S&P 500) en un bróker regulado.", "Las acciones en IQ son CFD: no eres dueña de la acción y pagas por cada noche abierta. Para largo plazo, compra la acción real en otro lado.", "Más adelante: aprender a leer una empresa (ingresos, ganancias, valuación) antes de comprar acciones sueltas."]] ] },
+  ];
+  const lw = $("lessons");
+  LESSONS.forEach((l, i) => {
+    const d = el("details", "lesson"); const s = el("summary");
+    s.append(el("span", "n", String(i + 1).padStart(2, "0")), el("span", "tt", l.t), el("span", "lvl", l.lvl));
+    const b = el("div", "body");
+    for (const [k, v] of l.body) {
+      if (k === "p") b.append(el("p", null, v));
+      else if (k === "tip") b.append(el("p", "tip", v));
+      else if (k === "ul") { const u = el("ul"); v.forEach(x => u.append(el("li", null, x))); b.append(u); }
+    }
+    d.append(s, b); lw.append(d);
+  });
+
+  /* ---------- Lab 1 ---------- */
+  function lab1() {
+    const p = +$("payout").value / 100, w = +$("winrate").value / 100;
+    $("payoutOut").textContent = Math.round(p * 100) + "%"; $("winrateOut").textContent = Math.round(w * 100);
+    const be = 1 / (1 + p); $("beOut").textContent = (be * 100).toFixed(1);
+    const ev = 100 * (w * p * 10 - (1 - w) * 10);
+    const o = $("evOut"); o.textContent = (ev >= 0 ? "+$" : "−$") + Math.abs(ev).toFixed(0);
+    o.style.color = ev >= 0 ? "var(--up)" : "var(--down)";
+    $("evNote").textContent = w < be ? (w >= .5 ? "Aciertas más de la mitad y aun así pierdes." : "Por debajo del punto de equilibrio: pierdes.") : "Por encima del punto de equilibrio. Ahora hay que sostenerlo.";
+  }
+  ["payout", "winrate"].forEach(id => $(id).addEventListener("input", lab1)); lab1();
+
+  /* ---------- Lab 2 ---------- */
+  let simData = null;
+  function simulate() {
+    const w = +$("simWin").value / 100, p = +$("simPay").value / 100, N = 200;
+    let a = 100, m = 100, stake = 2; const A = [a], M = [m]; let bustAt = null;
+    for (let i = 0; i < N; i++) {
+      const win = Math.random() < w;
+      if (a >= 2) a += win ? 2 * p : -2;
+      if (m > 0) {
+        const s = Math.min(stake, m);
+        if (win) { m += s * p; stake = 2; } else { m -= s; stake = s * 2; }
+        if (m < 0.01 && bustAt == null) { m = 0; bustAt = i + 1; }
+      }
+      A.push(+a.toFixed(2)); M.push(+m.toFixed(2));
+    }
+    simData = { A, M, bustAt };
+    const f = (v) => "$" + v.toFixed(0);
+    $("simMsg").textContent = `Riesgo fijo terminó con ${f(A[N])}. Martingala ` + (bustAt ? `quemó la cuenta en la operación ${bustAt}.` : `terminó con ${f(M[N])}, pero mira lo cerca que estuvo de quebrar.`);
+    drawSim();
+  }
+  function drawSim() {
+    const cv = $("simCanvas"); if (!simData || !cv.offsetParent) return;
+    const { c, w, h } = prep(cv); const pad = { l: 44, r: 12, t: 14, b: 22 };
+    const all = simData.A.concat(simData.M); const max = Math.max(150, ...all), min = 0;
+    const X = (i) => pad.l + i / (simData.A.length - 1) * (w - pad.l - pad.r);
+    const Y = (v) => pad.t + (1 - (v - min) / (max - min)) * (h - pad.t - pad.b);
+    c.clearRect(0, 0, w, h);
+    c.font = MONO; c.fillStyle = css("--dim"); c.strokeStyle = css("--line"); c.lineWidth = 1;
+    const step = max > 300 ? 100 : 50;
+    for (let v = 0; v <= max; v += step) { c.beginPath(); c.moveTo(pad.l, Y(v)); c.lineTo(w - pad.r, Y(v)); c.stroke(); c.fillText("$" + v, 6, Y(v) + 4); }
+    c.setLineDash([3, 4]); c.strokeStyle = css("--muted"); c.beginPath(); c.moveTo(pad.l, Y(100)); c.lineTo(w - pad.r, Y(100)); c.stroke(); c.setLineDash([]);
+    const line = (arr, col, fill) => {
+      if (fill) { const g = c.createLinearGradient(0, pad.t, 0, h - pad.b); g.addColorStop(0, "rgba(214,179,106,.22)"); g.addColorStop(1, "rgba(214,179,106,0)"); c.fillStyle = g; c.beginPath(); arr.forEach((v, i) => i ? c.lineTo(X(i), Y(v)) : c.moveTo(X(i), Y(v))); c.lineTo(X(arr.length - 1), Y(0)); c.lineTo(X(0), Y(0)); c.closePath(); c.fill(); }
+      c.strokeStyle = col; c.lineWidth = 1.8; c.beginPath(); arr.forEach((v, i) => i ? c.lineTo(X(i), Y(v)) : c.moveTo(X(i), Y(v))); c.stroke();
+      const L = arr.length - 1; c.fillStyle = col; c.beginPath(); c.arc(X(L), Y(arr[L]), 3.5, 0, 7); c.fill();
+    };
+    line(simData.M, css("--down"), false); line(simData.A, css("--gold"), true);
+  }
+  ["simWin", "simPay"].forEach(id => $(id).addEventListener("input", () => { $("simWinOut").textContent = $("simWin").value; $("simPayOut").textContent = $("simPay").value + "%"; }));
+  $("simRun").onclick = simulate; simulate();
+
+  /* ---------- Lab 3 ---------- */
+  let prac = null, mode = "trend", answered = false, hits = 0, tries = 0;
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  function genTrend() {
+    const kind = ["alcista", "bajista", "lateral"][Math.floor(Math.random() * 3)];
+    const drift = kind === "alcista" ? 1.3 : kind === "bajista" ? -1.3 : 0; let p = 900 + rnd(-30, 30); const base = p; const C = [];
+    for (let i = 0; i < 48; i++) {
+      const pull = kind === "lateral" ? (base - p) * 0.15 : 0;
+      const o = p, cl = o + drift + pull + rnd(-5, 5) + Math.sin(i / 3) * 1.5;
+      C.push({ o, c: cl, h: Math.max(o, cl) + rnd(0.5, 4), l: Math.min(o, cl) - rnd(0.5, 4) }); p = cl;
+    }
+    return { kind, C };
+  }
+  function genSupport() {
+    const S = 880 + rnd(-20, 20); const C = []; let p = S + 25; const phase = rnd(0, 3);
+    for (let i = 0; i < 48; i++) {
+      const target = S + 6 + 28 * (1 + Math.sin(i / 4.2 + phase)) / 2 + i * 0.25;
+      const o = p, cl = o + (target - o) * 0.5 + rnd(-3, 3);
+      let l = Math.min(o, cl) - rnd(0.5, 4), h = Math.max(o, cl) + rnd(0.5, 4);
+      if (l < S) l = S - rnd(0, 1.5);
+      C.push({ o, c: cl, h, l }); p = cl;
+    }
+    return { kind: "soporte", S, C };
+  }
+  function newPrac() {
+    answered = false; prac = mode === "trend" ? genTrend() : genSupport(); prac.click = null;
+    $("pracMsg").textContent = ""; $("pracMsg").className = "feedback";
+    $("trendBtns").hidden = mode !== "trend";
+    $("pracHelp").textContent = mode === "trend" ? "Mira las velas y elige la tendencia." : "Toca el gráfico a la altura donde crees que está el soporte (el piso donde el precio rebota).";
+    drawPrac();
+  }
+  let geo = null;
+  function drawPrac() {
+    const cv = $("pracCanvas"); if (!prac || !cv.offsetParent) return;
+    const { c, w, h } = prep(cv); const pad = { l: 12, r: 64, t: 16, b: 16 };
+    const hi = Math.max(...prac.C.map(x => x.h)) + 4, lo = Math.min(...prac.C.map(x => x.l)) - 4;
+    const Y = (v) => pad.t + (1 - (v - lo) / (hi - lo)) * (h - pad.t - pad.b);
+    const cw = (w - pad.l - pad.r) / prac.C.length;
+    geo = { Y, lo, hi, pad, h };
+    c.clearRect(0, 0, w, h);
+    c.strokeStyle = css("--line"); c.fillStyle = css("--dim"); c.font = MONO; c.lineWidth = 1;
+    for (let k = 0; k <= 5; k++) { const v = lo + (hi - lo) * k / 5; const y = Y(v); c.beginPath(); c.moveTo(pad.l, y); c.lineTo(w - pad.r, y); c.stroke(); c.fillText((1 + v / 10000).toFixed(4), w - pad.r + 6, y + 4); }
+    prac.C.forEach((k, i) => {
+      const x = pad.l + i * cw + cw / 2, up = k.c >= k.o, col = up ? css("--up") : css("--down");
+      c.strokeStyle = col; c.fillStyle = col; c.lineWidth = 1;
+      c.beginPath(); c.moveTo(x, Y(k.h)); c.lineTo(x, Y(k.l)); c.stroke();
+      const y1 = Y(Math.max(k.o, k.c)), y2 = Y(Math.min(k.o, k.c));
+      c.fillRect(x - cw * 0.32, y1, cw * 0.64, Math.max(1, y2 - y1));
+    });
+    const last = prac.C[prac.C.length - 1]; const ly = Y(last.c);
+    c.fillStyle = css("--gold"); c.fillRect(w - pad.r + 2, ly - 9, pad.r - 4, 18); c.fillStyle = "#0A0F1C"; c.fillText((1 + last.c / 10000).toFixed(4), w - pad.r + 6, ly + 4);
+    if (answered && prac.kind === "soporte") {
+      c.fillStyle = "rgba(43,212,140,.15)"; c.fillRect(pad.l, Y(prac.S + 3), w - pad.l - pad.r, Y(prac.S - 3) - Y(prac.S + 3));
+      c.strokeStyle = css("--up"); c.lineWidth = 1.5; c.beginPath(); c.moveTo(pad.l, Y(prac.S)); c.lineTo(w - pad.r, Y(prac.S)); c.stroke();
+    }
+    if (prac.click != null) { c.strokeStyle = css("--gold"); c.setLineDash([5, 4]); c.lineWidth = 1.5; c.beginPath(); c.moveTo(pad.l, prac.click); c.lineTo(w - pad.r, prac.click); c.stroke(); c.setLineDash([]); }
+  }
+  const scoreTxt = () => { $("score").textContent = tries ? `ACIERTOS ${hits}/${tries}` : ""; };
+  document.querySelectorAll("#trendBtns button").forEach(b => b.onclick = () => {
+    if (answered || !prac) return; answered = true; tries++;
+    const ok = b.dataset.ans === prac.kind; if (ok) hits++;
+    const why = { alcista: "los mínimos y máximos van subiendo", bajista: "los máximos y mínimos van bajando", lateral: "el precio va y viene sin superar su techo ni su piso" };
+    const m = $("pracMsg"); m.className = "feedback " + (ok ? "ok" : "bad");
+    m.textContent = (ok ? "¡Bien! " : `Era ${prac.kind}. `) + `Se nota porque ${why[prac.kind]}.`; scoreTxt();
+  });
+  $("pracCanvas").addEventListener("click", (ev) => {
+    if (mode !== "sup" || answered || !geo) return;
+    const r = ev.currentTarget.getBoundingClientRect(); const y = ev.clientY - r.top;
+    const price = geo.lo + (1 - (y - geo.pad.t) / (geo.h - geo.pad.t - geo.pad.b)) * (geo.hi - geo.lo);
+    answered = true; tries++; prac.click = y;
+    const ok = Math.abs(price - prac.S) <= 6; if (ok) hits++;
+    const m = $("pracMsg"); m.className = "feedback " + (ok ? "ok" : "bad");
+    m.textContent = ok ? "¡Exacto! Ahí el precio rebotó varias veces. La franja verde es la zona." : "Casi. El soporte es la franja verde: fíjate en los puntos más bajos donde el precio rebotó varias veces.";
+    scoreTxt(); drawPrac();
+  });
+  const setMode = (m) => { mode = m; $("modeTrend").setAttribute("aria-pressed", m === "trend"); $("modeSup").setAttribute("aria-pressed", m === "sup"); $("modeTrend").className = "btn" + (m === "trend" ? "" : " ghost"); $("modeSup").className = "btn" + (m === "sup" ? "" : " ghost"); newPrac(); };
+  $("modeTrend").onclick = () => setMode("trend"); $("modeSup").onclick = () => setMode("sup");
+  $("pracNext").onclick = newPrac; newPrac();
+  let rz; addEventListener("resize", () => { clearTimeout(rz); rz = setTimeout(() => { drawSim(); drawPrac(); drawCurve(); }, 150); });
+
+  /* ---------- Reloj ---------- */
+  const tick = async () => {
+    const t = lima(); $("clock").textContent = hhmm(t.mins);
+    if (t.date !== checkDate) { // cambió el día: lista nueva
+      checkDate = t.date; checklist = {};
+      if (user) { const { data } = await sb.from("checklist_diario").select("items").eq("fecha", t.date).maybeSingle(); checklist = (data && data.items) || {}; }
+      loadChecks();
+    }
+    renderHoy();
+  };
+  setInterval(tick, 30000);
+  setInterval(loadCal, 30 * 60000);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) { tick(); } });
+
+  show(location.hash.slice(1) || store.get("pulso.tab") || "hoy");
+  tick(); loadCal();
+})();
+</script>
+</body>
+</html>
